@@ -1,0 +1,212 @@
+{
+  "sources": [
+    {
+      "label": "Wikipedia: Traditional Chinese medicine",
+      "url": "https://en.wikipedia.org/wiki/Traditional_Chinese_medicine",
+      "note": "Used for high-level categorization: materia medica, meridians, formulas, syndromes, and diagnostic logic."
+    },
+    {
+      "label": "Wikipedia: Chinese herbology",
+      "url": "https://en.wikipedia.org/wiki/Chinese_herbology",
+      "note": "Used for common herb examples and herb classification concepts such as nature, flavor, and channel affinity."
+    },
+    {
+      "label": "Wikipedia: Chinese classic herbal formula",
+      "url": "https://en.wikipedia.org/wiki/Chinese_classic_herbal_formula",
+      "note": "Used for classic formula examples and the learning idea that formulas compose multiple herbs."
+    },
+    {
+      "label": "GitHub search: 中医 中药 方剂 知识图谱",
+      "url": "https://api.github.com/search/repositories?q=%E4%B8%AD%E5%8C%BB%20%E4%B8%AD%E8%8D%AF%20%E6%96%B9%E5%89%82%20%E7%9F%A5%E8%AF%86%E5%9B%BE%E8%B0%B1",
+      "note": "Open repositories showed common app structures around Neo4j knowledge graphs, herb/formula visualization, syndrome matching, and Q&A flows."
+    }
+  ],
+  "modules": [
+    {
+      "id": "herbs",
+      "title": "Herb Library",
+      "cn": "本草组件库",
+      "subtitle": "Herbs as learnable system components",
+      "summary": "Explore each herb as a structured object: nature, flavor, channel affinity, role, and relationship to formulas.",
+      "sampleItems": ["人参 Ren Shen", "甘草 Gan Cao", "黄芪 Huang Qi", "黄连 Huang Lian"],
+      "tags": ["nature", "flavor", "channel", "component"]
+    },
+    {
+      "id": "meridians",
+      "title": "Meridian Network",
+      "cn": "经络网络",
+      "subtitle": "Body logic as routes and signal pathways",
+      "summary": "Meridians are presented as a living network for organizing organs, movement, surface-depth logic, and herb affinity.",
+      "sampleItems": ["肺经 Lung", "脾经 Spleen", "肝经 Liver", "肾经 Kidney"],
+      "tags": ["network", "organ systems", "flow", "mapping"]
+    },
+    {
+      "id": "formulas",
+      "title": "Formula Engine",
+      "cn": "方剂引擎",
+      "subtitle": "Compositions, hierarchy, and intent",
+      "summary": "Formulas are modeled as purposeful compositions using the classical roles of monarch, minister, assistant, and envoy.",
+      "sampleItems": ["四君子汤", "六味地黄丸", "桂枝汤", "小柴胡汤"],
+      "tags": ["composition", "君臣佐使", "formula", "intent"]
+    },
+    {
+      "id": "diagnosis",
+      "title": "Diagnosis Logic Map",
+      "cn": "辨证逻辑图",
+      "subtitle": "Syndromes as system states",
+      "summary": "Diagnosis is framed as inference: signs, tongue, pulse, temperature, fluids, and movement combine into pattern recognition.",
+      "sampleItems": ["气虚", "阴虚", "肝气郁结", "湿热"],
+      "tags": ["inference", "syndrome", "state", "pattern"]
+    },
+    {
+      "id": "classics",
+      "title": "Classical Text Explorer",
+      "cn": "经典文本探索器",
+      "subtitle": "Classics as the source code of concepts",
+      "summary": "Classical works become navigable anchors that connect theory, herbs, formulas, and diagnostic language.",
+      "sampleItems": ["黄帝内经", "神农本草经", "伤寒论", "金匮要略"],
+      "tags": ["source text", "theory", "classics", "context"]
+    }
+  ],
+  "cards": [
+    {
+      "id": "ren-shen",
+      "type": "herbs",
+      "title": "Ginseng",
+      "cn": "人参",
+      "pinyin": "Ren Shen",
+      "summary": "A core qi-tonifying herb often taught as a reference point for deficiency patterns and formula hierarchy.",
+      "tags": ["qi", "tonify", "spleen", "lung"],
+      "nature": "slightly warm",
+      "flavor": "sweet, slightly bitter",
+      "meridians": ["Spleen", "Lung", "Heart"],
+      "role": "Monarch in qi-tonifying formulas",
+      "visual": "root"
+    },
+    {
+      "id": "gan-cao",
+      "type": "herbs",
+      "title": "Licorice",
+      "cn": "甘草",
+      "pinyin": "Gan Cao",
+      "summary": "Frequently used to harmonize formulas, moderate harsh properties, and connect multiple herbs into a coherent composition.",
+      "tags": ["harmonize", "sweet", "envoy", "formula glue"],
+      "nature": "neutral",
+      "flavor": "sweet",
+      "meridians": ["Heart", "Lung", "Spleen", "Stomach"],
+      "role": "Envoy or harmonizer",
+      "visual": "golden stem"
+    },
+    {
+      "id": "huang-qi",
+      "type": "herbs",
+      "title": "Astragalus",
+      "cn": "黄芪",
+      "pinyin": "Huang Qi",
+      "summary": "A qi-supporting herb often associated with surface stability, upward movement, and resilience metaphors.",
+      "tags": ["qi", "surface", "ascent", "resilience"],
+      "nature": "slightly warm",
+      "flavor": "sweet",
+      "meridians": ["Spleen", "Lung"],
+      "role": "System support",
+      "visual": "yellow slice"
+    },
+    {
+      "id": "huang-lian",
+      "type": "herbs",
+      "title": "Coptis",
+      "cn": "黄连",
+      "pinyin": "Huang Lian",
+      "summary": "A bitter, cold reference herb for heat-clearing logic, especially when mapping excess heat and damp-heat states.",
+      "tags": ["bitter", "cold", "heat", "damp-heat"],
+      "nature": "cold",
+      "flavor": "bitter",
+      "meridians": ["Heart", "Stomach", "Liver"],
+      "role": "Heat-clearing component",
+      "visual": "bitter thread"
+    },
+    {
+      "id": "liu-wei",
+      "type": "formulas",
+      "title": "Liu Wei Di Huang Wan",
+      "cn": "六味地黄丸",
+      "summary": "A classic six-ingredient formula often used in learning materials to illustrate yin-supporting composition logic.",
+      "tags": ["formula", "yin", "kidney", "composition"],
+      "role": "Six-herb composition pattern",
+      "visual": "six orbits"
+    },
+    {
+      "id": "si-jun-zi",
+      "type": "formulas",
+      "title": "Si Jun Zi Tang",
+      "cn": "四君子汤",
+      "summary": "A clean introductory formula for understanding qi support and the monarch-minister-assistant-envoy model.",
+      "tags": ["formula", "qi", "spleen", "君臣佐使"],
+      "role": "Beginner formula model",
+      "visual": "four pillars"
+    },
+    {
+      "id": "lung-meridian",
+      "type": "meridians",
+      "title": "Lung Meridian",
+      "cn": "手太阴肺经",
+      "summary": "A route for learning surface defense, breath, fluids, and the relationship between internal organ and exterior signals.",
+      "tags": ["lung", "surface", "breath", "fluids"],
+      "visual": "silver path"
+    },
+    {
+      "id": "liver-meridian",
+      "type": "meridians",
+      "title": "Liver Meridian",
+      "cn": "足厥阴肝经",
+      "summary": "A conceptual route for movement, constraint, emotional patterning, and smooth circulation.",
+      "tags": ["liver", "movement", "constraint", "flow"],
+      "visual": "green arc"
+    },
+    {
+      "id": "qi-deficiency",
+      "type": "diagnosis",
+      "title": "Qi Deficiency",
+      "cn": "气虚",
+      "summary": "A system state taught through low drive, weak transformation, and reduced resilience in the TCM model.",
+      "tags": ["syndrome", "low energy", "spleen", "inference"],
+      "visual": "dim field"
+    },
+    {
+      "id": "yin-deficiency",
+      "type": "diagnosis",
+      "title": "Yin Deficiency",
+      "cn": "阴虚",
+      "summary": "A state model for insufficient cooling, moistening, and anchoring qualities in classical pattern language.",
+      "tags": ["syndrome", "cooling", "kidney", "heat signs"],
+      "visual": "thin moon"
+    },
+    {
+      "id": "neijing",
+      "type": "classics",
+      "title": "Huangdi Neijing",
+      "cn": "黄帝内经",
+      "summary": "A foundational theoretical anchor for yin-yang, five phases, organs, meridians, and systemic thinking.",
+      "tags": ["classic", "theory", "yin-yang", "system"],
+      "visual": "ink scroll"
+    },
+    {
+      "id": "shanghan",
+      "type": "classics",
+      "title": "Shang Han Lun",
+      "cn": "伤寒论",
+      "summary": "A classical source for staged pattern recognition and formula reasoning through changing system states.",
+      "tags": ["classic", "formulas", "stages", "patterns"],
+      "visual": "thermal map"
+    }
+  ],
+  "relationships": [
+    { "from": "Herbs", "to": "Formulas", "label": "compose" },
+    { "from": "Formulas", "to": "Syndromes", "label": "target states" },
+    { "from": "Meridians", "to": "Herbs", "label": "channel affinity" },
+    { "from": "Diagnostics", "to": "Syndromes", "label": "infers" },
+    { "from": "Classics", "to": "Theory", "label": "define language" },
+    { "from": "Theory", "to": "Diagnostics", "label": "frames questions" },
+    { "from": "Syndromes", "to": "Meridians", "label": "localize patterns" }
+  ]
+}
