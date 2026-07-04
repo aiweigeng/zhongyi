@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "TCM Learning Space",
-  description: "A futuristic interface for understanding Traditional Chinese Medicine systems.",
+  title: "TCM Operating System",
+  description: "A bilingual Traditional Chinese Medicine operating system with real-time meridian flow visualization.",
 };
 
 export default function RootLayout({

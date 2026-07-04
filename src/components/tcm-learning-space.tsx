@@ -1,637 +1,611 @@
 "use client";
 
 import {
-  Activity,
-  ArrowRight,
   BookOpenText,
   BrainCircuit,
-  CircleDot,
   FlaskConical,
+  Languages,
   Leaf,
   Network,
-  Search,
   Send,
   Sparkles,
   Waves,
 } from "lucide-react";
-import { AnimatePresence, motion, useScroll, useTransform } from "framer-motion";
-import type { CSSProperties, FormEvent, ReactNode } from "react";
-import { useMemo, useState } from "react";
-import learningData from "@/data/tcm-learning-space.json";
-import type { KnowledgeCard, LearningModule, TcmCategory, TcmLearningData } from "@/lib/types";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type FormEvent,
+} from "react";
+import { i18n, type I18nKey, type Language } from "@/data/i18n";
 
-const data = learningData as TcmLearningData;
+type ModuleId = "herbs" | "meridians" | "formula" | "diagnosis" | "classic";
+type SystemState = "balanced" | "qiDeficiency" | "heat" | "stagnation";
+type MeridianId = "lung" | "spleen" | "liver" | "kidney" | "ren";
+type BodyRegionId = "head" | "chest" | "abdomen" | "arms" | "legs";
 
-const categoryMeta: Record<
-  TcmCategory,
-  { label: string; cn: string; icon: typeof Leaf; accent: string; glow: string }
+type ModuleConfig = {
+  id: ModuleId;
+  labelKey: I18nKey;
+  descKey: I18nKey;
+  panelKey: I18nKey;
+  icon: typeof Leaf;
+};
+
+type MeridianConfig = {
+  id: MeridianId;
+  labelKey: I18nKey;
+  path: string;
+};
+
+type BodyRegionConfig = {
+  id: BodyRegionId;
+  labelKey: I18nKey;
+  meridian: MeridianId;
+  style: CSSProperties;
+};
+
+type AiBlock = {
+  title: string;
+  body: string;
+};
+
+const moduleConfigs: ModuleConfig[] = [
+  { id: "herbs", labelKey: "herbs", descKey: "herbsDesc", panelKey: "herbsPanel", icon: Leaf },
+  { id: "meridians", labelKey: "meridians", descKey: "meridiansDesc", panelKey: "meridiansPanel", icon: Network },
+  { id: "formula", labelKey: "formula", descKey: "formulaDesc", panelKey: "formulaPanel", icon: FlaskConical },
+  { id: "diagnosis", labelKey: "diagnosis", descKey: "diagnosisDesc", panelKey: "diagnosisPanel", icon: BrainCircuit },
+  { id: "classic", labelKey: "classic", descKey: "classicDesc", panelKey: "classicPanel", icon: BookOpenText },
+];
+
+const stateKeys: Array<{ id: SystemState; labelKey: I18nKey; descKey: I18nKey }> = [
+  { id: "balanced", labelKey: "balanced", descKey: "balancedDesc" },
+  { id: "qiDeficiency", labelKey: "qiDeficiency", descKey: "qiDeficiencyDesc" },
+  { id: "heat", labelKey: "heat", descKey: "heatDesc" },
+  { id: "stagnation", labelKey: "stagnation", descKey: "stagnationDesc" },
+];
+
+const meridianConfigs: MeridianConfig[] = [
+  {
+    id: "lung",
+    labelKey: "lungMeridian",
+    path: "M208 128 C176 140 139 179 118 238 C98 295 96 355 122 424",
+  },
+  {
+    id: "spleen",
+    labelKey: "spleenMeridian",
+    path: "M178 664 C171 589 151 526 141 461 C133 402 151 353 193 313 C222 285 233 236 218 184",
+  },
+  {
+    id: "liver",
+    labelKey: "liverMeridian",
+    path: "M236 665 C230 591 240 531 268 471 C294 414 289 354 246 312 C220 287 205 248 212 206",
+  },
+  {
+    id: "kidney",
+    labelKey: "kidneyMeridian",
+    path: "M216 674 C217 585 224 507 246 440 C267 374 264 306 225 252 C203 222 198 184 211 145",
+  },
+  {
+    id: "ren",
+    labelKey: "renMeridian",
+    path: "M211 116 C212 198 212 286 211 374 C210 482 210 574 211 674",
+  },
+];
+
+const bodyRegions: BodyRegionConfig[] = [
+  { id: "head", labelKey: "regionHead", meridian: "ren", style: { left: "42%", top: "5%", width: "16%", height: "11%" } },
+  { id: "chest", labelKey: "regionChest", meridian: "lung", style: { left: "35%", top: "23%", width: "30%", height: "16%" } },
+  { id: "abdomen", labelKey: "regionAbdomen", meridian: "spleen", style: { left: "36%", top: "41%", width: "28%", height: "18%" } },
+  { id: "arms", labelKey: "regionArms", meridian: "lung", style: { left: "17%", top: "30%", width: "66%", height: "14%" } },
+  { id: "legs", labelKey: "regionLegs", meridian: "kidney", style: { left: "34%", top: "61%", width: "32%", height: "28%" } },
+];
+
+const stateVisuals: Record<SystemState, { primary: string; secondary: string; speed: number; opacity: number; irregular: number }> = {
+  balanced: { primary: "#42d39d", secondary: "#d6a84f", speed: 0.054, opacity: 0.9, irregular: 0 },
+  qiDeficiency: { primary: "#7acfa9", secondary: "#b8a76c", speed: 0.027, opacity: 0.45, irregular: 0.05 },
+  heat: { primary: "#ff664d", secondary: "#ffbf5a", speed: 0.086, opacity: 0.95, irregular: 0.08 },
+  stagnation: { primary: "#42d39d", secondary: "#d6a84f", speed: 0.041, opacity: 0.72, irregular: 0.42 },
+};
+
+const aiContentKeys: Record<
+  SystemState,
+  { analysis: I18nKey; pattern: I18nKey; meridians: I18nKey; herbs: I18nKey; direction: I18nKey }
 > = {
-  herbs: { label: "Herbs", cn: "本草", icon: Leaf, accent: "#42d39d", glow: "rgba(66, 211, 157, 0.32)" },
-  meridians: { label: "Meridians", cn: "经络", icon: Network, accent: "#9bd4ff", glow: "rgba(155, 212, 255, 0.26)" },
-  formulas: { label: "Formulas", cn: "方剂", icon: FlaskConical, accent: "#d6a84f", glow: "rgba(214, 168, 79, 0.3)" },
-  diagnosis: { label: "Diagnosis", cn: "辨证", icon: BrainCircuit, accent: "#e08d6f", glow: "rgba(224, 141, 111, 0.28)" },
-  classics: { label: "Classics", cn: "经典", icon: BookOpenText, accent: "#f7e4b4", glow: "rgba(247, 228, 180, 0.24)" },
+  balanced: {
+    analysis: "aiBalancedAnalysis",
+    pattern: "aiBalancedPattern",
+    meridians: "aiBalancedMeridians",
+    herbs: "aiBalancedHerbs",
+    direction: "aiBalancedDirection",
+  },
+  qiDeficiency: {
+    analysis: "aiQiAnalysis",
+    pattern: "aiQiPattern",
+    meridians: "aiQiMeridians",
+    herbs: "aiQiHerbs",
+    direction: "aiQiDirection",
+  },
+  heat: {
+    analysis: "aiHeatAnalysis",
+    pattern: "aiHeatPattern",
+    meridians: "aiHeatMeridians",
+    herbs: "aiHeatHerbs",
+    direction: "aiHeatDirection",
+  },
+  stagnation: {
+    analysis: "aiStagnationAnalysis",
+    pattern: "aiStagnationPattern",
+    meridians: "aiStagnationMeridians",
+    herbs: "aiStagnationHerbs",
+    direction: "aiStagnationDirection",
+  },
 };
 
-const moduleIcons: Record<TcmCategory, typeof Leaf> = {
-  herbs: Leaf,
-  meridians: Network,
-  formulas: FlaskConical,
-  diagnosis: BrainCircuit,
-  classics: BookOpenText,
-};
-
-const particleStyles = Array.from({ length: 18 }, (_, index) => ({
-  left: `${(index * 37) % 100}%`,
-  "--x": `${(index % 5) * 9 - 18}px`,
-  "--duration": `${16 + (index % 7) * 2}s`,
-  "--rotate": `${index * 28}deg`,
-  animationDelay: `${index * -1.7}s`,
-})) as Array<CSSProperties>;
-
-const fadeUp = {
-  hidden: { opacity: 0, y: 34, filter: "blur(12px)" },
-  visible: { opacity: 1, y: 0, filter: "blur(0px)" },
-};
+const initialQuestion: string = i18n.zh.initialQuestion;
 
 export function TcmLearningSpace() {
-  const [activeModule, setActiveModule] = useState<TcmCategory>("herbs");
-  const [activeCategory, setActiveCategory] = useState<TcmCategory>("herbs");
-  const [question, setQuestion] = useState("最近总觉得疲倦，应该怎样从中医系统角度理解？");
-  const [mentorAnswer, setMentorAnswer] = useState(createMentorAnswer(question));
-  const { scrollYProgress } = useScroll();
-  const heroY = useTransform(scrollYProgress, [0, 0.22], [0, -130]);
-  const diagramY = useTransform(scrollYProgress, [0.05, 0.38], [60, -40]);
+  const [language, setLanguage] = useStoredLanguage();
+  const [activeModule, setActiveModule] = useState<ModuleId>("meridians");
+  const [systemState, setSystemState] = useState<SystemState>("balanced");
+  const [activeMeridian, setActiveMeridian] = useState<MeridianId>("ren");
+  const [activeRegion, setActiveRegion] = useState<BodyRegionId | null>(null);
+  const [question, setQuestion] = useState(initialQuestion);
+  const [submittedQuestion, setSubmittedQuestion] = useState(initialQuestion);
+  const [aiBlocks, setAiBlocks] = useState<AiBlock[]>(() => createAiAnswer("zh", initialQuestion, "balanced"));
+  const t = i18n[language];
 
   const activeModuleData = useMemo(
-    () => data.modules.find((module) => module.id === activeModule) ?? data.modules[0],
+    () => moduleConfigs.find((module) => module.id === activeModule) ?? moduleConfigs[0],
     [activeModule],
   );
 
-  const activeCards = useMemo(
-    () => data.cards.filter((card) => card.type === activeModule).slice(0, 4),
-    [activeModule],
+  const submitAi = useCallback(
+    (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      const detectedState = detectSystemState(question, systemState);
+      setSystemState(detectedState);
+      setSubmittedQuestion(question);
+      setAiBlocks(createAiAnswer(language, question, detectedState));
+    },
+    [language, question, systemState],
   );
 
-  const filteredCards = useMemo(
-    () => data.cards.filter((card) => card.type === activeCategory),
-    [activeCategory],
-  );
+  useEffect(() => {
+    setAiBlocks(createAiAnswer(language, submittedQuestion, systemState));
+  }, [language, submittedQuestion, systemState]);
 
-  function handleMentorSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setMentorAnswer(createMentorAnswer(question));
-  }
+  const ActiveIcon = activeModuleData.icon;
 
   return (
-    <main className="ssr-visible relative min-h-screen overflow-hidden">
-      <div className="aurora-field" />
-      <div className="grain" />
-      {particleStyles.map((style, index) => (
-        <span key={index} className="herb-particle" style={style} />
-      ))}
+    <main className="tcm-os">
+      <div className="os-background layer-background" />
 
-      <nav className="fixed left-1/2 top-4 z-50 w-[min(1060px,calc(100%-24px))] -translate-x-1/2 rounded-full border border-white/15 bg-[#08140f]/70 px-3 py-2 shadow-2xl backdrop-blur-xl">
-        <div className="flex items-center justify-between gap-3">
-          <a href="#top" className="flex min-h-11 items-center gap-2 rounded-full px-3 text-sm font-semibold text-[#fff7e6] outline-none transition focus-visible:ring-2 focus-visible:ring-[#42d39d]">
-            <span className="grid h-8 w-8 place-items-center rounded-full bg-[#42d39d]/15 text-[#42d39d]">
-              <Leaf size={18} aria-hidden="true" />
-            </span>
-            TCM Space
-          </a>
-          <div className="hidden items-center gap-1 md:flex">
-            {["系统", "模块", "知识", "AI"].map((item, index) => (
-              <a
-                key={item}
-                href={["#system", "#modules", "#knowledge", "#mentor"][index]}
-                className="min-h-10 rounded-full px-4 py-2 text-sm text-[#fff7e6]/72 outline-none transition hover:bg-white/10 hover:text-[#fff7e6] focus-visible:ring-2 focus-visible:ring-[#42d39d]"
-              >
-                {item}
-              </a>
-            ))}
+      <button
+        type="button"
+        className="language-switch"
+        onClick={() => setLanguage(language === "zh" ? "en" : "zh")}
+        aria-label={t.languageSwitch}
+      >
+        <Languages size={17} aria-hidden="true" />
+        <span>{t.languageSwitch}</span>
+      </button>
+
+      <header className="os-header layer-ui">
+        <a href="#system" className="brand-lockup" aria-label={t.title}>
+          <span className="brand-mark">
+            <Leaf size={19} aria-hidden="true" />
+          </span>
+          <span>
+            <strong>{t.title}</strong>
+            <small>{t.systemSubtitle}</small>
+          </span>
+        </a>
+        <nav className="os-nav" aria-label={t.title}>
+          <a href="#system">{t.navSystem}</a>
+          <a href="#modules">{t.navModules}</a>
+          <a href="#ai">{t.navAI}</a>
+        </nav>
+      </header>
+
+      <section id="system" className="os-shell">
+        <aside id="modules" className="module-rail glass-surface layer-ui">
+          <div className="rail-heading">
+            <Sparkles size={18} aria-hidden="true" />
+            <span>{t.booting}</span>
           </div>
-          <a
-            href="#modules"
-            className="inline-flex min-h-11 items-center gap-2 rounded-full bg-[#fff7e6] px-4 py-2 text-sm font-semibold text-[#08140f] shadow-[0_0_36px_rgba(66,211,157,0.28)] outline-none transition hover:bg-[#d6a84f] focus-visible:ring-2 focus-visible:ring-[#42d39d]"
-          >
-            开始探索 <ArrowRight size={16} aria-hidden="true" />
-          </a>
-        </div>
-      </nav>
-
-      <section id="top" className="relative flex min-h-screen items-center pt-28">
-        <motion.div style={{ y: heroY }} className="section-shell grid gap-12 lg:grid-cols-[1fr_0.92fr] lg:items-center">
-          <motion.div initial="hidden" animate="visible" variants={fadeUp} transition={{ duration: 0.8, ease: "easeOut" }}>
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-[#42d39d]/30 bg-[#42d39d]/10 px-4 py-2 text-sm text-[#c7ffe7]">
-              <Sparkles size={16} aria-hidden="true" />
-              Ancient wisdom meets AI intelligence
-            </div>
-            <h1 className="max-w-4xl text-balance text-5xl font-semibold leading-[1.05] tracking-normal text-[#fff7e6] md:text-7xl">
-              中医知识的另一种打开方式
-            </h1>
-            <p className="mt-6 max-w-2xl text-pretty text-xl leading-8 text-[#fff7e6]/74 md:text-2xl">
-              把千年经验，转化为可交互的认知系统
-            </p>
-            <div className="mt-10 flex flex-col gap-3 sm:flex-row">
-              <a
-                href="#modules"
-                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[#42d39d] px-6 py-3 font-semibold text-[#06110d] shadow-[0_0_48px_rgba(66,211,157,0.35)] outline-none transition hover:-translate-y-0.5 hover:bg-[#fff7e6] focus-visible:ring-2 focus-visible:ring-[#fff7e6]"
-              >
-                开始探索 <ArrowRight size={18} aria-hidden="true" />
-              </a>
-              <a
-                href="#system"
-                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full border border-[#fff7e6]/18 bg-white/5 px-6 py-3 font-semibold text-[#fff7e6] outline-none backdrop-blur transition hover:-translate-y-0.5 hover:bg-white/12 focus-visible:ring-2 focus-visible:ring-[#42d39d]"
-              >
-                查看系统图 <Network size={18} aria-hidden="true" />
-              </a>
-            </div>
-            <div className="mt-12 grid max-w-2xl grid-cols-3 gap-3">
-              {[
-                ["5", "learning modules"],
-                ["12", "knowledge cards"],
-                ["7", "concept links"],
-              ].map(([value, label]) => (
-                <div key={label} className="glass-panel rounded-[8px] p-4">
-                  <div className="text-2xl font-semibold text-[#d6a84f]">{value}</div>
-                  <div className="mt-1 text-xs uppercase tracking-[0.16em] text-[#fff7e6]/54">{label}</div>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, scale: 0.94, y: 30 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            transition={{ duration: 0.9, delay: 0.2, ease: "easeOut" }}
-            className="glass-panel soft-depth relative min-h-[520px] overflow-hidden rounded-[8px] p-5"
-          >
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(66,211,157,0.20),transparent_30%),radial-gradient(circle_at_76%_80%,rgba(214,168,79,0.18),transparent_32%)]" />
-            <div className="relative grid h-full min-h-[480px] place-items-center">
-              <SystemOrb compact />
-            </div>
-            <div className="absolute bottom-5 left-5 right-5 grid grid-cols-2 gap-3">
-              {data.modules.slice(0, 4).map((module) => {
-                const Icon = moduleIcons[module.id];
-                return (
-                  <button
-                    key={module.id}
-                    onClick={() => setActiveModule(module.id)}
-                    className="rounded-[8px] border border-white/15 bg-[#08140f]/54 p-3 text-left outline-none backdrop-blur transition hover:-translate-y-1 hover:border-[#42d39d]/50 focus-visible:ring-2 focus-visible:ring-[#42d39d]"
-                  >
-                    <Icon className="mb-2 text-[#42d39d]" size={17} aria-hidden="true" />
-                    <div className="text-sm font-semibold text-[#fff7e6]">{module.cn}</div>
-                  </button>
-                );
-              })}
-            </div>
-          </motion.div>
-        </motion.div>
-      </section>
-
-      <AnimatedSection id="system" eyebrow="Concept Overview" title="把中医理解成一个可视化系统">
-        <div className="grid gap-6 lg:grid-cols-[0.92fr_1.08fr] lg:items-center">
-          <motion.div style={{ y: diagramY }} className="glass-panel min-h-[520px] overflow-hidden rounded-[8px] p-4 md:p-8">
-            <SystemDiagram />
-          </motion.div>
-          <div className="grid gap-3">
-            {[
-              ["Herbs", "components", "每味药是有属性、有方向、有关系的组件。"],
-              ["Formulas", "compositions", "方剂不是列表，而是有主次、约束与意图的组合。"],
-              ["Meridians", "network", "经络提供身体系统中的路径、定位与连接。"],
-              ["Syndromes", "system states", "证候是对当前状态的抽象，而非单一症状。"],
-              ["Diagnosis", "inference engine", "辨证把脉象、舌象、冷热、虚实转为判断路径。"],
-            ].map(([term, model, text], index) => (
-              <motion.div
-                key={term}
-                initial={{ opacity: 0, x: 28 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true, margin: "-80px" }}
-                transition={{ duration: 0.55, delay: index * 0.07 }}
-                className="glass-panel rounded-[8px] p-5 transition hover:-translate-y-1 hover:border-[#42d39d]/45"
-              >
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <div className="text-sm uppercase tracking-[0.18em] text-[#42d39d]">{term}</div>
-                    <div className="mt-1 text-xl font-semibold text-[#fff7e6]">{model}</div>
-                  </div>
-                  <CircleDot className="text-[#d6a84f]" aria-hidden="true" />
-                </div>
-                <p className="mt-3 text-sm leading-6 text-[#fff7e6]/67">{text}</p>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </AnimatedSection>
-
-      <AnimatedSection id="modules" eyebrow="Interactive Modules" title="五个入口，进入同一个知识宇宙">
-        <div className="grid gap-5 lg:grid-cols-[0.86fr_1.14fr]">
-          <div className="grid gap-3">
-            {data.modules.map((module) => {
-              const Icon = moduleIcons[module.id];
-              const selected = activeModule === module.id;
+          <div className="module-list">
+            {moduleConfigs.map((module) => {
+              const Icon = module.icon;
+              const isActive = activeModule === module.id;
               return (
                 <button
                   key={module.id}
+                  type="button"
+                  className={`module-card ${isActive ? "is-active" : ""}`}
                   onClick={() => setActiveModule(module.id)}
-                  className={`group rounded-[8px] border p-4 text-left outline-none transition duration-300 focus-visible:ring-2 focus-visible:ring-[#42d39d] ${
-                    selected
-                      ? "border-[#42d39d]/70 bg-[#42d39d]/14 shadow-[0_0_42px_rgba(66,211,157,0.18)]"
-                      : "border-white/14 bg-white/[0.055] hover:-translate-y-1 hover:border-[#d6a84f]/45"
-                  }`}
                 >
-                  <div className="flex items-center gap-3">
-                    <span className="grid h-11 w-11 place-items-center rounded-[8px] bg-[#fff7e6]/10 text-[#42d39d] transition group-hover:bg-[#d6a84f]/18">
-                      <Icon size={20} aria-hidden="true" />
-                    </span>
-                    <span>
-                      <span className="block text-base font-semibold text-[#fff7e6]">{module.title}</span>
-                      <span className="block text-sm text-[#fff7e6]/55">{module.cn}</span>
-                    </span>
-                  </div>
-                  <p className="mt-3 text-sm leading-6 text-[#fff7e6]/62">{module.subtitle}</p>
+                  <span className="module-icon">
+                    <Icon size={20} aria-hidden="true" />
+                  </span>
+                  <span>
+                    <strong>{t[module.labelKey]}</strong>
+                    <small>{t[module.descKey]}</small>
+                  </span>
                 </button>
               );
             })}
           </div>
 
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeModuleData.id}
-              initial={{ opacity: 0, y: 18, filter: "blur(10px)" }}
-              animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-              exit={{ opacity: 0, y: -14, filter: "blur(10px)" }}
-              transition={{ duration: 0.36 }}
-              className="glass-panel min-h-[620px] rounded-[8px] p-5 md:p-7"
-            >
-              <ModulePreview module={activeModuleData} cards={activeCards} />
-            </motion.div>
-          </AnimatePresence>
-        </div>
-      </AnimatedSection>
-
-      <AnimatedSection id="knowledge" eyebrow="Knowledge Dashboard" title="Bento-grid preview, not textbook pages">
-        <div className="mb-6 flex flex-wrap gap-2">
-          {(Object.keys(categoryMeta) as TcmCategory[]).map((category) => {
-            const meta = categoryMeta[category];
-            const Icon = meta.icon;
-            return (
+          <div className="state-controls">
+            <span className="control-label">{t.stateLabel}</span>
+            {stateKeys.map((state) => (
               <button
-                key={category}
-                onClick={() => setActiveCategory(category)}
-                className={`inline-flex min-h-11 items-center gap-2 rounded-full border px-4 text-sm font-semibold outline-none transition focus-visible:ring-2 focus-visible:ring-[#42d39d] ${
-                  activeCategory === category
-                    ? "border-[#42d39d]/70 bg-[#fff7e6] text-[#08140f]"
-                    : "border-white/14 bg-white/[0.055] text-[#fff7e6]/72 hover:bg-white/12"
-                }`}
+                key={state.id}
+                type="button"
+                className={`state-button ${systemState === state.id ? "is-active" : ""}`}
+                onClick={() => setSystemState(state.id)}
               >
-                <Icon size={16} aria-hidden="true" />
-                {meta.label}
+                <span>{t[state.labelKey]}</span>
+                <small>{t[state.descKey]}</small>
               </button>
-            );
-          })}
-        </div>
-        <motion.div layout className="grid auto-rows-[minmax(220px,auto)] gap-4 md:grid-cols-4">
-          <AnimatePresence mode="popLayout">
-            {filteredCards.map((card, index) => (
-              <KnowledgeBentoCard key={card.id} card={card} index={index} />
             ))}
-          </AnimatePresence>
-        </motion.div>
-      </AnimatedSection>
+          </div>
+        </aside>
 
-      <AnimatedSection id="mentor" eyebrow="AI Learning Mode" title="Ask AI TCM Mentor">
-        <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
-          <form onSubmit={handleMentorSubmit} className="glass-panel rounded-[8px] p-5 md:p-7">
-            <label htmlFor="mentor-question" className="text-sm uppercase tracking-[0.2em] text-[#42d39d]">
-              mock prompt
-            </label>
+        <section className="visual-core layer-ui" aria-label={t.meridians}>
+          <div className="stage-status glass-surface">
+            <div>
+              <span>{t.activeMeridian}</span>
+              <strong>{t[meridianConfigs.find((item) => item.id === activeMeridian)?.labelKey ?? "renMeridian"]}</strong>
+            </div>
+            <div>
+              <span>{t.activeRegion}</span>
+              <strong>{activeRegion ? t[bodyRegions.find((item) => item.id === activeRegion)?.labelKey ?? "regionChest"] : t.noneSelected}</strong>
+            </div>
+          </div>
+
+          <MeridianStage
+            language={language}
+            systemState={systemState}
+            activeMeridian={activeMeridian}
+            activeRegion={activeRegion}
+            onMeridianSelect={setActiveMeridian}
+            onRegionSelect={setActiveRegion}
+          />
+
+          <div className="module-panel glass-surface">
+            <div className="panel-title">
+              <span className="module-icon">
+                <ActiveIcon size={20} aria-hidden="true" />
+              </span>
+              <span>
+                <small>{t.panelOpen}</small>
+                <strong>{t[activeModuleData.labelKey]}</strong>
+              </span>
+            </div>
+            <p>{t[activeModuleData.panelKey]}</p>
+            <div className="signal-row" aria-label={t.panelSignals}>
+              <span>{t.signalQi}</span>
+              <span>{t.signalBlood}</span>
+              <span>{t.signalFluids}</span>
+              <span>{t.signalSpirit}</span>
+            </div>
+          </div>
+        </section>
+
+        <aside id="ai" className="ai-panel glass-surface layer-ai">
+          <div className="ai-heading">
+            <span className="ai-mark">
+              <BrainCircuit size={22} aria-hidden="true" />
+            </span>
+            <span>
+              <strong>{t.aiTitle}</strong>
+              <small>{t.aiSubtitle}</small>
+            </span>
+          </div>
+
+          <form onSubmit={submitAi} className="ai-form">
             <textarea
-              id="mentor-question"
               value={question}
               onChange={(event) => setQuestion(event.target.value)}
-              className="mt-4 min-h-44 w-full resize-none rounded-[8px] border border-white/15 bg-[#06110d]/72 p-4 text-base leading-7 text-[#fff7e6] outline-none transition placeholder:text-[#fff7e6]/35 focus:border-[#42d39d]/70 focus:ring-2 focus:ring-[#42d39d]/20"
-              placeholder="Ask a learning question about TCM theory..."
+              placeholder={t.aiInput}
+              aria-label={t.aiInput}
             />
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-              <span className="inline-flex items-center gap-2 text-sm text-[#fff7e6]/55">
-                <Search size={16} aria-hidden="true" />
-                Educational concept demo only
-              </span>
-              <button className="inline-flex min-h-11 items-center gap-2 rounded-full bg-[#42d39d] px-5 font-semibold text-[#06110d] outline-none transition hover:bg-[#fff7e6] focus-visible:ring-2 focus-visible:ring-[#fff7e6]">
-                Generate reasoning <Send size={16} aria-hidden="true" />
-              </button>
-            </div>
+            <button type="submit">
+              <Send size={16} aria-hidden="true" />
+              <span>{t.aiSubmit}</span>
+            </button>
           </form>
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={mentorAnswer.seed}
-              initial={{ opacity: 0, y: 18, filter: "blur(10px)" }}
-              animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-              exit={{ opacity: 0, y: -12, filter: "blur(8px)" }}
-              transition={{ duration: 0.36 }}
-              className="glass-panel rounded-[8px] p-5 md:p-7"
-            >
-              <div className="mb-5 flex items-center gap-3">
-                <span className="grid h-11 w-11 place-items-center rounded-full bg-[#d6a84f]/16 text-[#d6a84f]">
-                  <BrainCircuit aria-hidden="true" />
-                </span>
-                <div>
-                  <div className="font-semibold text-[#fff7e6]">Structured reasoning preview</div>
-                  <div className="text-sm text-[#fff7e6]/55">Not a medical response. Learning model only.</div>
-                </div>
-              </div>
-              <div className="space-y-4">
-                {mentorAnswer.blocks.map((block) => (
-                  <div key={block.title} className="rounded-[8px] border border-white/12 bg-white/[0.055] p-4">
-                    <div className="text-sm font-semibold uppercase tracking-[0.16em] text-[#42d39d]">{block.title}</div>
-                    <p className="mt-2 text-sm leading-6 text-[#fff7e6]/72">{block.body}</p>
-                  </div>
-                ))}
-              </div>
-            </motion.div>
-          </AnimatePresence>
-        </div>
-      </AnimatedSection>
 
-      <footer className="section-shell pb-10 pt-8">
-        <div className="glass-panel flex flex-col gap-4 rounded-[8px] p-5 text-sm text-[#fff7e6]/58 md:flex-row md:items-center md:justify-between">
-          <span>TCM Learning Space is an educational interface prototype, not diagnosis or treatment guidance.</span>
-          <span className="text-[#d6a84f]">Design: AI-Native + Organic Biophilic + Bento Grid</span>
-        </div>
+          <div className="ai-output">
+            {aiBlocks.map((block) => (
+              <article key={block.title}>
+                <strong>{block.title}</strong>
+                <p>{block.body}</p>
+              </article>
+            ))}
+          </div>
+        </aside>
+      </section>
+
+      <footer className="os-footer layer-ui">
+        <span>{t.disclaimer}</span>
       </footer>
     </main>
   );
 }
 
-function AnimatedSection({
-  id,
-  eyebrow,
-  title,
-  children,
+const MeridianStage = memo(function MeridianStage({
+  language,
+  systemState,
+  activeMeridian,
+  activeRegion,
+  onMeridianSelect,
+  onRegionSelect,
 }: {
-  id: string;
-  eyebrow: string;
-  title: string;
-  children: ReactNode;
+  language: Language;
+  systemState: SystemState;
+  activeMeridian: MeridianId;
+  activeRegion: BodyRegionId | null;
+  onMeridianSelect: (id: MeridianId) => void;
+  onRegionSelect: (id: BodyRegionId | null) => void;
 }) {
-  return (
-    <section id={id} className="py-20 md:py-28">
-      <motion.div
-        className="section-shell"
-        initial="hidden"
-        whileInView="visible"
-        viewport={{ once: true, margin: "-90px" }}
-        variants={fadeUp}
-        transition={{ duration: 0.7, ease: "easeOut" }}
-      >
-        <div className="mb-10 max-w-3xl">
-          <div className="mb-3 text-sm font-semibold uppercase tracking-[0.22em] text-[#42d39d]">{eyebrow}</div>
-          <h2 className="text-balance text-3xl font-semibold leading-tight text-[#fff7e6] md:text-5xl">{title}</h2>
-        </div>
-        {children}
-      </motion.div>
-    </section>
-  );
-}
-
-function SystemOrb({ compact = false }: { compact?: boolean }) {
-  return (
-    <div className={`relative grid place-items-center ${compact ? "h-[330px] w-[330px]" : "h-[420px] w-[420px]"} max-w-full`}>
-      <motion.div
-        className="absolute inset-0 rounded-full border border-[#42d39d]/30 bg-[#42d39d]/5"
-        animate={{ rotate: 360 }}
-        transition={{ duration: 34, repeat: Infinity, ease: "linear" }}
-      />
-      <motion.div
-        className="absolute inset-10 rounded-full border border-dashed border-[#d6a84f]/34"
-        animate={{ rotate: -360 }}
-        transition={{ duration: 44, repeat: Infinity, ease: "linear" }}
-      />
-      {data.modules.map((module, index) => {
-        const angle = (index / data.modules.length) * Math.PI * 2 - Math.PI / 2;
-        const radius = compact ? 142 : 180;
-        const x = Math.cos(angle) * radius;
-        const y = Math.sin(angle) * radius;
-        const Icon = moduleIcons[module.id];
-        return (
-          <motion.div
-            key={module.id}
-            className="absolute grid h-20 w-20 place-items-center rounded-full border border-white/15 bg-[#08140f]/72 text-center shadow-2xl backdrop-blur"
-            style={{ x, y }}
-            animate={{ y: [y, y - 8, y], boxShadow: [`0 0 22px ${categoryMeta[module.id].glow}`, `0 0 44px ${categoryMeta[module.id].glow}`, `0 0 22px ${categoryMeta[module.id].glow}`] }}
-            transition={{ duration: 4 + index, repeat: Infinity, ease: "easeInOut" }}
-          >
-            <Icon style={{ color: categoryMeta[module.id].accent }} size={22} aria-hidden="true" />
-            <span className="mt-1 text-[11px] font-semibold text-[#fff7e6]/78">{module.cn}</span>
-          </motion.div>
-        );
-      })}
-      <div className="grid h-32 w-32 place-items-center rounded-full border border-[#fff7e6]/20 bg-[#fff7e6]/10 text-center shadow-[0_0_70px_rgba(66,211,157,0.26)] backdrop-blur">
-        <div>
-          <Waves className="mx-auto text-[#42d39d]" size={30} aria-hidden="true" />
-          <div className="mt-2 text-sm font-semibold text-[#fff7e6]">TCM System</div>
-          <div className="mt-1 text-[11px] text-[#fff7e6]/55">认知模型</div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SystemDiagram() {
-  const nodes = [
-    { label: "Herbs", sub: "components", x: 70, y: 100, type: "herbs" as TcmCategory },
-    { label: "Formulas", sub: "compositions", x: 250, y: 76, type: "formulas" as TcmCategory },
-    { label: "Meridians", sub: "network", x: 440, y: 128, type: "meridians" as TcmCategory },
-    { label: "Syndromes", sub: "states", x: 382, y: 330, type: "diagnosis" as TcmCategory },
-    { label: "Diagnosis", sub: "inference", x: 145, y: 344, type: "diagnosis" as TcmCategory },
-    { label: "Classics", sub: "source", x: 270, y: 224, type: "classics" as TcmCategory },
-  ];
+  const t = i18n[language];
+  const visual = stateVisuals[systemState];
 
   return (
-    <div className="relative min-h-[470px] overflow-hidden rounded-[8px] bg-[#06110d]/36">
-      <svg className="absolute inset-0 h-full w-full" viewBox="0 0 540 430" role="img" aria-label="Animated TCM concept system diagram">
+    <div className="meridian-stage glass-surface">
+      <svg className="meridian-svg-layer layer-meridian" viewBox="0 0 420 720" aria-label={t.meridians}>
         <defs>
-          <linearGradient id="diagramGradient" x1="0" x2="1">
-            <stop offset="0%" stopColor="#42d39d" stopOpacity="0.85" />
-            <stop offset="55%" stopColor="#d6a84f" stopOpacity="0.75" />
-            <stop offset="100%" stopColor="#fff7e6" stopOpacity="0.55" />
-          </linearGradient>
+          <filter id="meridianGlow">
+            <feGaussianBlur stdDeviation="5" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
         </defs>
-        {[
-          ["70,100", "250,76"],
-          ["250,76", "440,128"],
-          ["440,128", "382,330"],
-          ["382,330", "145,344"],
-          ["145,344", "70,100"],
-          ["270,224", "70,100"],
-          ["270,224", "382,330"],
-          ["270,224", "440,128"],
-        ].map(([from, to]) => (
-          <line key={`${from}-${to}`} x1={from.split(",")[0]} y1={from.split(",")[1]} x2={to.split(",")[0]} y2={to.split(",")[1]} stroke="url(#diagramGradient)" strokeWidth="2" className="diagram-line" />
+        {meridianConfigs.map((meridian) => (
+          <path
+            key={meridian.id}
+            d={meridian.path}
+            className={`meridian-path ${activeMeridian === meridian.id ? "is-active" : ""}`}
+            stroke={activeMeridian === meridian.id ? visual.secondary : visual.primary}
+            filter="url(#meridianGlow)"
+          />
         ))}
       </svg>
-      {nodes.map((node, index) => {
-        const meta = categoryMeta[node.type];
-        return (
-          <motion.div
-            key={node.label}
-            className="absolute w-36 rounded-[8px] border border-white/15 bg-[#08140f]/72 p-3 text-center backdrop-blur"
-            style={{ left: `${(node.x / 540) * 100}%`, top: `${(node.y / 430) * 100}%`, transform: "translate(-50%, -50%)" }}
-            initial={{ opacity: 0, scale: 0.86 }}
-            whileInView={{ opacity: 1, scale: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.45, delay: index * 0.08 }}
-            whileHover={{ y: -6, boxShadow: `0 0 40px ${meta.glow}` }}
+
+      <MeridianParticleLayer systemState={systemState} activeMeridian={activeMeridian} />
+
+      <svg className="body-silhouette layer-body" viewBox="0 0 420 720" aria-hidden="true">
+        <path
+          className="body-core"
+          d="M211 60 C251 60 279 90 279 128 C279 154 264 177 240 188 C276 211 298 257 300 316 C303 401 278 452 270 520 C263 582 282 642 260 687 C248 711 225 710 214 678 C211 668 208 668 205 678 C194 710 171 711 160 687 C138 642 157 582 150 520 C142 452 117 401 120 316 C122 257 144 211 180 188 C156 177 141 154 141 128 C141 90 171 60 211 60 Z"
+        />
+        <path
+          className={`region-glow ${activeRegion ? "is-visible" : ""}`}
+          d={regionGlowPath(activeRegion)}
+        />
+      </svg>
+
+      <div className="body-region-layer layer-ui" aria-label={t.activeRegion}>
+        {bodyRegions.map((region) => (
+          <button
+            key={region.id}
+            type="button"
+            className={`body-region ${activeRegion === region.id ? "is-active" : ""}`}
+            style={region.style}
+            onMouseEnter={() => {
+              onRegionSelect(region.id);
+              onMeridianSelect(region.meridian);
+            }}
+            onFocus={() => {
+              onRegionSelect(region.id);
+              onMeridianSelect(region.meridian);
+            }}
+            onMouseLeave={() => onRegionSelect(null)}
+            onBlur={() => onRegionSelect(null)}
+            onClick={() => {
+              onRegionSelect(region.id);
+              onMeridianSelect(region.meridian);
+            }}
           >
-            <div className="text-sm font-semibold" style={{ color: meta.accent }}>
-              {node.label}
-            </div>
-            <div className="mt-1 text-xs text-[#fff7e6]/58">{node.sub}</div>
-          </motion.div>
-        );
-      })}
-    </div>
-  );
-}
-
-function ModulePreview({ module, cards }: { module: LearningModule; cards: KnowledgeCard[] }) {
-  const Icon = moduleIcons[module.id];
-  return (
-    <div className="h-full">
-      <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
-        <div>
-          <div className="inline-flex h-12 w-12 items-center justify-center rounded-[8px] bg-[#42d39d]/14 text-[#42d39d]">
-            <Icon aria-hidden="true" />
-          </div>
-          <h3 className="mt-5 text-3xl font-semibold text-[#fff7e6]">{module.title}</h3>
-          <div className="mt-1 text-xl text-[#d6a84f]">{module.cn}</div>
-          <p className="mt-5 max-w-2xl text-base leading-7 text-[#fff7e6]/68">{module.summary}</p>
-        </div>
-        <div className="rounded-[8px] border border-[#d6a84f]/26 bg-[#d6a84f]/10 p-4 text-sm leading-6 text-[#fff7e6]/72 md:w-60">
-          <span className="ancient-serif text-[#fff7e6]">“方从法出，法随证立”</span>
-          <span className="mt-2 block text-[#fff7e6]/48">A learning quote rendered as system logic.</span>
-        </div>
-      </div>
-
-      <div className="mt-7 flex flex-wrap gap-2">
-        {module.tags.map((tag) => (
-          <span key={tag} className="tag">
-            {tag}
-          </span>
+            {t[region.labelKey]}
+          </button>
         ))}
       </div>
 
-      <div className="mt-8 grid gap-4 md:grid-cols-2">
-        {cards.map((card, index) => (
-          <motion.div
-            key={card.id}
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.36, delay: index * 0.06 }}
-            className="group min-h-48 rounded-[8px] border border-white/13 bg-white/[0.055] p-5 transition duration-300 hover:-translate-y-1 hover:border-[#42d39d]/50 hover:shadow-[0_0_44px_rgba(66,211,157,0.14)]"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h4 className="text-lg font-semibold text-[#fff7e6]">{card.cn}</h4>
-                <div className="text-sm text-[#d6a84f]">{card.title}</div>
-              </div>
-              <span className="rounded-full bg-[#42d39d]/12 px-3 py-1 text-xs text-[#9cf0ca]">{card.visual}</span>
-            </div>
-            <p className="mt-4 text-sm leading-6 text-[#fff7e6]/65">{card.summary}</p>
-            <div className="mt-5 flex flex-wrap gap-2">
-              {card.tags.slice(0, 3).map((tag) => (
-                <span key={tag} className="tag">
-                  {tag}
-                </span>
-              ))}
-            </div>
-          </motion.div>
+      <svg className="meridian-hit-layer layer-ui" viewBox="0 0 420 720" aria-label={t.activeMeridian}>
+        {meridianConfigs.map((meridian) => (
+          <path
+            key={meridian.id}
+            d={meridian.path}
+            role="button"
+            tabIndex={0}
+            aria-label={t[meridian.labelKey]}
+            className="meridian-hit-path"
+            onMouseEnter={() => onMeridianSelect(meridian.id)}
+            onFocus={() => onMeridianSelect(meridian.id)}
+            onClick={() => onMeridianSelect(meridian.id)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onMeridianSelect(meridian.id);
+              }
+            }}
+          />
         ))}
-      </div>
+      </svg>
 
-      <div className="mt-7 grid gap-3 rounded-[8px] border border-white/12 bg-[#06110d]/48 p-4 md:grid-cols-2">
-        {module.sampleItems.map((item) => (
-          <div key={item} className="flex items-center gap-2 text-sm text-[#fff7e6]/70">
-            <Activity size={16} className="text-[#42d39d]" aria-hidden="true" />
-            {item}
-          </div>
-        ))}
+      <div className="stage-caption layer-ui">
+        <Waves size={17} aria-hidden="true" />
+        <span>{t[stateKeys.find((state) => state.id === systemState)?.descKey ?? "balancedDesc"]}</span>
       </div>
     </div>
   );
-}
+});
 
-function KnowledgeBentoCard({ card, index }: { card: KnowledgeCard; index: number }) {
-  const meta = categoryMeta[card.type];
-  const large = index === 0 || index === 3;
-  return (
-    <motion.article
-      layout
-      initial={{ opacity: 0, scale: 0.94, filter: "blur(8px)" }}
-      animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
-      exit={{ opacity: 0, scale: 0.94, filter: "blur(8px)" }}
-      transition={{ duration: 0.3 }}
-      whileHover={{ y: -8, boxShadow: `0 0 56px ${meta.glow}` }}
-      className={`glass-panel group relative overflow-hidden rounded-[8px] p-5 ${large ? "md:col-span-2 md:row-span-2" : "md:col-span-1"}`}
-    >
-      <div className="absolute -right-12 -top-12 h-36 w-36 rounded-full blur-3xl transition group-hover:scale-125" style={{ background: meta.glow }} />
-      <div className="relative flex h-full min-h-48 flex-col">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="text-sm uppercase tracking-[0.17em]" style={{ color: meta.accent }}>
-              {meta.label}
-            </div>
-            <h3 className="mt-3 text-2xl font-semibold text-[#fff7e6]">{card.cn}</h3>
-            <div className="mt-1 text-sm text-[#fff7e6]/55">{card.title}</div>
-          </div>
-          <span className="rounded-full border border-white/14 bg-white/10 px-3 py-1 text-xs text-[#fff7e6]/66">{card.visual}</span>
-        </div>
-        <p className="mt-5 text-sm leading-6 text-[#fff7e6]/68">{card.summary}</p>
-        {(card.nature || card.flavor || card.role) && (
-          <div className="mt-5 grid gap-2 text-sm text-[#fff7e6]/62">
-            {card.nature && <div>Nature: <span className="text-[#fff7e6]">{card.nature}</span></div>}
-            {card.flavor && <div>Flavor: <span className="text-[#fff7e6]">{card.flavor}</span></div>}
-            {card.role && <div>Role: <span className="text-[#fff7e6]">{card.role}</span></div>}
-          </div>
-        )}
-        <div className="mt-auto flex flex-wrap gap-2 pt-6">
-          {card.tags.map((tag) => (
-            <span key={tag} className="tag">
-              {tag}
-            </span>
-          ))}
-        </div>
-      </div>
-    </motion.article>
+const MeridianParticleLayer = memo(function MeridianParticleLayer({
+  systemState,
+  activeMeridian,
+}: {
+  systemState: SystemState;
+  activeMeridian: MeridianId;
+}) {
+  const pathRefs = useRef<Array<SVGPathElement | null>>([]);
+  const particleRefs = useRef<Array<SVGCircleElement | null>>([]);
+  const particles = useMemo(
+    () =>
+      Array.from({ length: 64 }, (_, index) => ({
+        pathIndex: index % meridianConfigs.length,
+        offset: ((index * 0.137) % 1) + 0.01,
+        speed: 0.72 + (index % 9) * 0.07,
+        size: 2.2 + (index % 5) * 0.45,
+      })),
+    [],
   );
+
+  useEffect(() => {
+    let frame = 0;
+
+    const animate = (time: number) => {
+      const visual = stateVisuals[systemState];
+
+      particles.forEach((particle, index) => {
+        const path = pathRefs.current[particle.pathIndex];
+        const circle = particleRefs.current[index];
+        if (!path || !circle) {
+          return;
+        }
+
+        const length = path.getTotalLength();
+        const meridian = meridianConfigs[particle.pathIndex];
+        const broken = systemState === "stagnation" ? Math.sin(time * 0.012 + index * 1.7) > 0.26 : true;
+        const irregularShift = visual.irregular * Math.sin(time * 0.004 + index * 0.91) * 38;
+        const distance = (time * visual.speed * particle.speed + particle.offset * length + irregularShift) % length;
+        const point = path.getPointAtLength(distance < 0 ? distance + length : distance);
+        const phase = distance / length;
+        const fade = Math.max(0.18, Math.sin(phase * Math.PI));
+        const selectedBoost = activeMeridian === meridian.id ? 1 : 0.48;
+        const opacity = broken ? visual.opacity * fade * selectedBoost : 0.08;
+
+        circle.setAttribute("cx", point.x.toFixed(2));
+        circle.setAttribute("cy", point.y.toFixed(2));
+        circle.setAttribute("r", String(particle.size));
+        circle.setAttribute("opacity", opacity.toFixed(3));
+        circle.setAttribute("fill", index % 3 === 0 ? visual.secondary : visual.primary);
+      });
+
+      frame = requestAnimationFrame(animate);
+    };
+
+    frame = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(frame);
+  }, [activeMeridian, particles, systemState]);
+
+  return (
+    <svg className="particle-flow-layer layer-particles" viewBox="0 0 420 720" aria-hidden="true">
+      <defs>
+        <filter id="particleGlow">
+          <feGaussianBlur stdDeviation="3.2" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+      </defs>
+      {meridianConfigs.map((meridian, index) => (
+        <path
+          key={meridian.id}
+          ref={(node) => {
+            pathRefs.current[index] = node;
+          }}
+          d={meridian.path}
+          className="particle-guide"
+        />
+      ))}
+      {particles.map((particle, index) => (
+        <circle
+          key={`${particle.pathIndex}-${index}`}
+          ref={(node) => {
+            particleRefs.current[index] = node;
+          }}
+          filter="url(#particleGlow)"
+        />
+      ))}
+    </svg>
+  );
+});
+
+function useStoredLanguage(): [Language, (language: Language) => void] {
+  const [language, setLanguageState] = useState<Language>("zh");
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem("tcm-os-language");
+    if (stored === "zh" || stored === "en") {
+      setLanguageState(stored);
+      document.documentElement.lang = stored === "zh" ? "zh-CN" : "en";
+    }
+  }, []);
+
+  const setLanguage = useCallback((nextLanguage: Language) => {
+    setLanguageState(nextLanguage);
+    window.localStorage.setItem("tcm-os-language", nextLanguage);
+    document.documentElement.lang = nextLanguage === "zh" ? "zh-CN" : "en";
+  }, []);
+
+  return [language, setLanguage];
 }
 
-function createMentorAnswer(question: string) {
+function detectSystemState(question: string, fallback: SystemState): SystemState {
   const normalized = question.toLowerCase();
-  const fatigue = /疲|累|气|weak|tired|energy/.test(normalized);
-  const heat = /热|上火|口苦|bitter|heat/.test(normalized);
-  const stress = /郁|压力|stress|情绪|anger/.test(normalized);
+  if (/疲|累|乏|短气|weak|tired|fatigue|energy/.test(normalized)) {
+    return "qiDeficiency";
+  }
+  if (/热|上火|口苦|烦|red|heat|bitter|irritable/.test(normalized)) {
+    return "heat";
+  }
+  if (/郁|胀|压力|情绪|stress|anger|stuck|distention/.test(normalized)) {
+    return "stagnation";
+  }
+  return fallback;
+}
 
-  const focus = heat ? "damp-heat / heat-clearing map" : stress ? "liver qi movement map" : fatigue ? "qi deficiency learning map" : "balanced systems map";
-  const herb = heat ? "黄连 Huang Lian" : stress ? "柴胡 Chai Hu as a concept anchor" : "人参 Ren Shen / 黄芪 Huang Qi";
-  const meridian = heat ? "Heart-Stomach-Liver channels" : stress ? "Liver meridian" : "Spleen-Lung meridians";
+function createAiAnswer(language: Language, question: string, state: SystemState): AiBlock[] {
+  const t = i18n[language];
+  const detectedState = detectSystemState(question, state);
+  const content = aiContentKeys[detectedState];
 
-  return {
-    seed: `${focus}-${question.length}`,
-    blocks: [
-      {
-        title: "1. Pattern lens",
-        body: `From a learning perspective, this question can be mapped to the ${focus}. The goal is not to name a disease, but to observe how signs could cluster into a system state.`,
-      },
-      {
-        title: "2. Relationship graph",
-        body: `Relevant nodes: syndrome state -> ${meridian} -> representative herb concepts -> formula composition. This mirrors the graph style used by open TCM knowledge systems.`,
-      },
-      {
-        title: "3. Concept references",
-        body: `Study anchors: ${herb}, formula hierarchy, and the distinction between symptoms as signals and syndromes as inferred states.`,
-      },
-    ],
-  };
+  return [
+    { title: t.aiSystemAnalysis, body: t[content.analysis] },
+    { title: t.aiPattern, body: t[content.pattern] },
+    { title: t.aiMeridians, body: t[content.meridians] },
+    { title: t.aiHerbs, body: t[content.herbs] },
+    { title: t.aiDirection, body: t[content.direction] },
+  ];
+}
+
+function regionGlowPath(region: BodyRegionId | null) {
+  if (region === "head") {
+    return "M172 111 C174 77 248 77 250 111 C253 151 232 174 211 174 C190 174 169 151 172 111 Z";
+  }
+  if (region === "chest") {
+    return "M151 218 C177 185 245 185 272 218 C286 252 276 303 211 304 C146 303 137 252 151 218 Z";
+  }
+  if (region === "abdomen") {
+    return "M160 326 C191 302 232 302 262 326 C278 365 264 430 211 435 C158 430 144 365 160 326 Z";
+  }
+  if (region === "arms") {
+    return "M109 255 C139 239 170 253 177 287 C145 302 121 340 114 395 C91 367 83 292 109 255 Z M311 255 C281 239 250 253 243 287 C275 302 299 340 306 395 C329 367 337 292 311 255 Z";
+  }
+  if (region === "legs") {
+    return "M166 472 C196 463 207 486 207 534 L205 661 C194 704 158 704 158 652 C158 580 148 526 166 472 Z M254 472 C224 463 213 486 213 534 L215 661 C226 704 262 704 262 652 C262 580 272 526 254 472 Z";
+  }
+  return "";
 }
